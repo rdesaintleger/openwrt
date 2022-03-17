@@ -1,6 +1,6 @@
 /* This file is released into the public domain */
 
-#include "mt7620a_netgear_wn3000rpv3_wn3100rpv2.dtsi"
+#include "mt7620a_netgear_wn3x00rp.dtsi"
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
