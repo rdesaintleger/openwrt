@@ -38,8 +38,6 @@
 #include <linux/spi/flash.h>
 #include <linux/if_ether.h>
 #include <linux/pps-gpio.h>
-#include <linux/usb/ehci_pdriver.h>
-#include <linux/usb/ohci_pdriver.h>
 #include <linux/clk-provider.h>
 #include <linux/clkdev.h>
 #include <linux/platform_data/cns3xxx.h>
@@ -347,29 +345,6 @@ static struct platform_device laguna_net_device = {
 	}
 };
 
-/*
- * UART
- */
-static void __init laguna_early_serial_setup(void)
-{
-#ifdef CONFIG_SERIAL_8250_CONSOLE
-	static struct uart_port laguna_serial_port = {
-		.membase        = (void __iomem *)CNS3XXX_UART0_BASE_VIRT,
-		.mapbase        = CNS3XXX_UART0_BASE,
-		.irq            = IRQ_CNS3XXX_UART0,
-		.iotype         = UPIO_MEM,
-		.flags          = UPF_BOOT_AUTOCONF | UPF_FIXED_TYPE,
-		.regshift       = 2,
-		.uartclk        = 24000000,
-		.line           = 0,
-		.type           = PORT_16550A,
-		.fifosize       = 16,
-	};
-
-	early_serial_setup(&laguna_serial_port);
-#endif
-}
-
 static struct resource laguna_uart_resources[] = {
 	{
 		.start = CNS3XXX_UART0_BASE,
@@ -421,103 +396,6 @@ static struct platform_device laguna_uart = {
 	.dev.platform_data  = laguna_uart_data,
 	.num_resources    = 3,
 	.resource   = laguna_uart_resources
-};
-
-/*
- * USB
- */
-static struct resource cns3xxx_usb_ehci_resources[] = {
-	[0] = {
-		.start = CNS3XXX_USB_BASE,
-		.end   = CNS3XXX_USB_BASE + SZ_16M - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start = IRQ_CNS3XXX_USB_EHCI,
-		.flags = IORESOURCE_IRQ,
-	},
-};
-
-static u64 cns3xxx_usb_ehci_dma_mask = DMA_BIT_MASK(32);
-
-static int csn3xxx_usb_power_on(struct platform_device *pdev)
-{
-	/*
-	 * EHCI and OHCI share the same clock and power,
-	 * resetting twice would cause the 1st controller been reset.
-	 * Therefore only do power up  at the first up device, and
-	 * power down at the last down device.
-	 *
-	 * Set USB AHB INCR length to 16
-	 */
-	if (atomic_inc_return(&usb_pwr_ref) == 1) {
-		cns3xxx_pwr_power_up(1 << PM_PLL_HM_PD_CTRL_REG_OFFSET_PLL_USB);
-		cns3xxx_pwr_clk_en(1 << PM_CLK_GATE_REG_OFFSET_USB_HOST);
-		cns3xxx_pwr_soft_rst(1 << PM_SOFT_RST_REG_OFFST_USB_HOST);
-		__raw_writel((__raw_readl(MISC_CHIP_CONFIG_REG) | (0X2 << 24)),
-			MISC_CHIP_CONFIG_REG);
-	}
-
-	return 0;
-}
-
-static void csn3xxx_usb_power_off(struct platform_device *pdev)
-{
-	/*
-	 * EHCI and OHCI share the same clock and power,
-	 * resetting twice would cause the 1st controller been reset.
-	 * Therefore only do power up  at the first up device, and
-	 * power down at the last down device.
-	 */
-	if (atomic_dec_return(&usb_pwr_ref) == 0)
-		cns3xxx_pwr_clk_dis(1 << PM_CLK_GATE_REG_OFFSET_USB_HOST);
-}
-
-static struct usb_ehci_pdata cns3xxx_usb_ehci_pdata = {
-	.power_on	= csn3xxx_usb_power_on,
-	.power_off	= csn3xxx_usb_power_off,
-};
-
-static struct platform_device cns3xxx_usb_ehci_device = {
-	.name          = "ehci-platform",
-	.num_resources = ARRAY_SIZE(cns3xxx_usb_ehci_resources),
-	.resource      = cns3xxx_usb_ehci_resources,
-	.dev           = {
-		.dma_mask          = &cns3xxx_usb_ehci_dma_mask,
-		.coherent_dma_mask = DMA_BIT_MASK(32),
-		.platform_data     = &cns3xxx_usb_ehci_pdata,
-	},
-};
-
-static struct resource cns3xxx_usb_ohci_resources[] = {
-	[0] = {
-		.start = CNS3XXX_USB_OHCI_BASE,
-		.end   = CNS3XXX_USB_OHCI_BASE + SZ_16M - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start = IRQ_CNS3XXX_USB_OHCI,
-		.flags = IORESOURCE_IRQ,
-	},
-};
-
-static u64 cns3xxx_usb_ohci_dma_mask = DMA_BIT_MASK(32);
-
-static struct usb_ohci_pdata cns3xxx_usb_ohci_pdata = {
-	.num_ports	= 1,
-	.power_on	= csn3xxx_usb_power_on,
-	.power_off	= csn3xxx_usb_power_off,
-};
-
-static struct platform_device cns3xxx_usb_ohci_device = {
-	.name          = "ohci-platform",
-	.num_resources = ARRAY_SIZE(cns3xxx_usb_ohci_resources),
-	.resource      = cns3xxx_usb_ohci_resources,
-	.dev           = {
-		.dma_mask          = &cns3xxx_usb_ohci_dma_mask,
-		.coherent_dma_mask = DMA_BIT_MASK(32),
-		.platform_data	   = &cns3xxx_usb_ohci_pdata,
-	},
 };
 
 static struct resource cns3xxx_usb_otg_resources[] = {
@@ -845,20 +723,9 @@ static void __init laguna_init(void)
 	pm_power_off = cns3xxx_power_off;
 }
 
-static struct map_desc laguna_io_desc[] __initdata = {
-	{
-		.virtual	= CNS3XXX_UART0_BASE_VIRT,
-		.pfn		= __phys_to_pfn(CNS3XXX_UART0_BASE),
-		.length		= SZ_4K,
-		.type		= MT_DEVICE,
-	},
-};
-
 static void __init laguna_map_io(void)
 {
 	cns3xxx_map_io();
-	iotable_init(ARRAY_AND_SIZE(laguna_io_desc));
-	laguna_early_serial_setup();
 }
 
 static int laguna_register_gpio(struct gpio *array, size_t num)
@@ -993,8 +860,7 @@ static int __init laguna_model_setup(void)
 		}
 
 		if (laguna_info.config_bitmap & (USB1_LOAD)) {
-			platform_device_register(&cns3xxx_usb_ehci_device);
-			platform_device_register(&cns3xxx_usb_ohci_device);
+			cns3xxx_usb_init();
 		}
 
 		if (laguna_info.config_bitmap & (SD_LOAD))

@@ -1,6 +1,6 @@
 --- a/arch/arm/mach-cns3xxx/core.c
 +++ b/arch/arm/mach-cns3xxx/core.c
-@@ -138,6 +138,7 @@ static int cns3xxx_set_oneshot(struct cl
+@@ -174,6 +174,7 @@
  
  	/* period set, and timer enabled in 'next_event' hook */
  	ctrl |= (1 << 2) | (1 << 9);
@@ -8,7 +8,7 @@
  	writel(ctrl, cns3xxx_tmr1 + TIMER1_2_CONTROL_OFFSET);
  	return 0;
  }
-@@ -148,7 +149,7 @@ static int cns3xxx_set_periodic(struct c
+@@ -184,7 +185,7 @@
  	int pclk = cns3xxx_cpu_clock() / 8;
  	int reload;
  
@@ -17,7 +17,7 @@
  	writel(reload, cns3xxx_tmr1 + TIMER1_AUTO_RELOAD_OFFSET);
  	ctrl |= (1 << 0) | (1 << 2) | (1 << 9);
  	writel(ctrl, cns3xxx_tmr1 + TIMER1_2_CONTROL_OFFSET);
-@@ -175,8 +176,8 @@ static struct clock_event_device cns3xxx
+@@ -211,8 +212,8 @@
  	.set_state_oneshot	= cns3xxx_set_oneshot,
  	.tick_resume		= cns3xxx_shutdown,
  	.set_next_event		= cns3xxx_timer_set_next_event,
@@ -28,7 +28,7 @@
  };
  
  static void __init cns3xxx_clockevents_init(unsigned int timer_irq)
-@@ -220,6 +221,32 @@ static void __init cns3xxx_init_twd(void
+@@ -256,6 +257,32 @@
  	twd_local_timer_register(&cns3xx_twd_local_timer);
  }
  
@@ -61,7 +61,7 @@
  /*
   * Set up the clock source and clock events devices
   */
-@@ -237,13 +264,12 @@ static void __init __cns3xxx_timer_init(
+@@ -273,13 +300,12 @@
  	/* stop free running timer3 */
  	writel(0, cns3xxx_tmr1 + TIMER_FREERUN_CONTROL_OFFSET);
  
@@ -78,7 +78,7 @@
  	/* mask irq, non-mask timer1 overflow */
  	irq_mask = readl(cns3xxx_tmr1 + TIMER1_2_INTERRUPT_MASK_OFFSET);
  	irq_mask &= ~(1 << 2);
-@@ -255,23 +281,9 @@ static void __init __cns3xxx_timer_init(
+@@ -291,23 +317,9 @@
  	val |= (1 << 9);
  	writel(val, cns3xxx_tmr1 + TIMER1_2_CONTROL_OFFSET);
  

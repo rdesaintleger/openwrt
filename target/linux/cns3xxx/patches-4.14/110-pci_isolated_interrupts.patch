@@ -8,7 +8,7 @@
  #include <linux/ptrace.h>
  #include <asm/mach/map.h>
  #include "cns3xxx.h"
-@@ -27,7 +28,7 @@ struct cns3xxx_pcie {
+@@ -27,7 +28,7 @@
  	void __iomem *host_regs; /* PCI config registers for host bridge */
  	void __iomem *cfg0_regs; /* PCI Type 0 config registers */
  	void __iomem *cfg1_regs; /* PCI Type 1 config registers */
@@ -17,7 +17,7 @@
  	struct resource res_io;
  	struct resource res_mem;
  	int port;
-@@ -95,7 +96,7 @@ static inline int check_master_abort(str
+@@ -95,7 +96,7 @@
  		void __iomem *host_base;
  		u32 sreg, ereg;
  
@@ -26,7 +26,7 @@
  		sreg = __raw_readw(host_base + 0x6) & 0xF900;
  		ereg = __raw_readl(host_base + 0x104); // Uncorrectable Error Status Reg
  
-@@ -209,7 +210,7 @@ static struct pci_ops cns3xxx_pcie_ops =
+@@ -209,7 +210,7 @@
  static int cns3xxx_pcie_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
  {
  	struct cns3xxx_pcie *cnspci = pdev_to_cnspci(dev);
@@ -35,7 +35,7 @@
  
  	pr_info("PCIe map irq: %04d:%02x:%02x.%02x slot %d, pin %d, irq: %d\n",
  		pci_domain_nr(dev->bus), dev->bus->number, PCI_SLOT(dev->devfn),
-@@ -235,7 +236,13 @@ static struct cns3xxx_pcie cns3xxx_pcie[
+@@ -235,7 +236,13 @@
  			.end = CNS3XXX_PCIE0_HOST_BASE - 1, /* 176 MiB */
  			.flags = IORESOURCE_MEM,
  		},
@@ -50,7 +50,7 @@
  		.port = 0,
  	},
  	[1] = {
-@@ -254,7 +261,13 @@ static struct cns3xxx_pcie cns3xxx_pcie[
+@@ -254,7 +261,13 @@
  			.end = CNS3XXX_PCIE1_HOST_BASE - 1, /* 176 MiB */
  			.flags = IORESOURCE_MEM,
  		},
@@ -65,7 +65,7 @@
  		.port = 1,
  	},
  };
-@@ -346,6 +359,14 @@ static int cns3xxx_pcie_abort_handler(un
+@@ -346,6 +359,14 @@
  	return 0;
  }
  
@@ -82,7 +82,7 @@
  	int i;
 --- a/arch/arm/mach-cns3xxx/core.h
 +++ b/arch/arm/mach-cns3xxx/core.h
-@@ -18,8 +18,10 @@ extern void cns3xxx_timer_init(void);
+@@ -18,8 +18,10 @@
  
  #ifdef CONFIG_PCI
  extern void __init cns3xxx_pcie_init_late(void);
@@ -92,4 +92,4 @@
 +static inline void cns3xxx_pcie_set_irqs(int bus, int *irqs) {}
  #endif
  
- void __init cns3xxx_map_io(void);
+ void __init cns3xxx_usb_init(void);

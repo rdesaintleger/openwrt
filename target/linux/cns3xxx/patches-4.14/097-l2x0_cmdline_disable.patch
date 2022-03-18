@@ -1,6 +1,6 @@
 --- a/arch/arm/mach-cns3xxx/core.c
 +++ b/arch/arm/mach-cns3xxx/core.c
-@@ -307,13 +307,26 @@ void __init cns3xxx_timer_init(void)
+@@ -343,13 +343,26 @@
  
  #ifdef CONFIG_CACHE_L2X0
  
@@ -30,7 +30,7 @@
  
  	/*
  	 * Tag RAM Control register
-@@ -343,7 +356,10 @@ void __init cns3xxx_l2x0_init(void)
+@@ -379,7 +392,10 @@
  
  	/* 32 KiB, 8-way, parity disable */
  	l2x0_init(base, 0x00500000, 0xfe0f0fff);
@@ -43,15 +43,17 @@
  
 --- a/arch/arm/mach-cns3xxx/cns3420vb.c
 +++ b/arch/arm/mach-cns3xxx/cns3420vb.c
-@@ -217,8 +217,6 @@ static struct platform_device *cns3420_p
+@@ -93,10 +93,6 @@
  
  static void __init cns3420_init(void)
  {
+-#ifdef CONFIG_CACHE_L2X0
 -	cns3xxx_l2x0_init();
+-#endif
 -
  	platform_add_devices(cns3420_pdevs, ARRAY_SIZE(cns3420_pdevs));
  
- 	cns3xxx_ahci_init();
+ 	cns3xxx_usb_init();
 --- a/arch/arm/mach-cns3xxx/core.h
 +++ b/arch/arm/mach-cns3xxx/core.h
 @@ -16,12 +16,6 @@
