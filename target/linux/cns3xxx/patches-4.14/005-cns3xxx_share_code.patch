@@ -9,7 +9,7 @@
  #include <linux/platform_device.h>
  #include <linux/mtd/mtd.h>
  #include <linux/mtd/physmap.h>
-@@ -87,161 +85,30 @@
+@@ -87,132 +85,10 @@
  };
  
  /*
@@ -142,10 +142,7 @@
  };
  
  static void __init cns3420_init(void)
- {
-+#ifdef CONFIG_CACHE_L2X0
- 	cns3xxx_l2x0_init();
-+#endif
+@@ -221,32 +97,16 @@
  
  	platform_add_devices(cns3420_pdevs, ARRAY_SIZE(cns3420_pdevs));
  
@@ -165,27 +162,38 @@
 -	},
 -};
 -
- static void __init cns3420_map_io(void)
- {
- 	cns3xxx_map_io();
+-static void __init cns3420_map_io(void)
+-{
+-	cns3xxx_map_io();
 -	iotable_init(cns3420_io_desc, ARRAY_SIZE(cns3420_io_desc));
 -
 -	cns3420_early_serial_setup();
- }
- 
+-}
+-
  MACHINE_START(CNS3420VB, "Cavium Networks CNS3420 Validation Board")
+ 	.atag_offset	= 0x100,
+-	.map_io		= cns3420_map_io,
++	.map_io		= cns3xxx_map_io,
+ 	.init_irq	= cns3xxx_init_irq,
+ 	.init_time	= cns3xxx_timer_init,
+ 	.init_machine	= cns3420_init,
 --- a/arch/arm/mach-cns3xxx/core.c
 +++ b/arch/arm/mach-cns3xxx/core.c
-@@ -12,6 +12,8 @@
+@@ -12,11 +12,10 @@
  #include <linux/interrupt.h>
  #include <linux/clockchips.h>
  #include <linux/io.h>
 +#include <linux/serial_core.h>
 +#include <linux/serial_8250.h>
  #include <linux/irqchip/arm-gic.h>
- #include <linux/of_platform.h>
+-#include <linux/of_platform.h>
  #include <linux/platform_device.h>
-@@ -79,12 +81,46 @@
+-#include <linux/usb/ehci_pdriver.h>
+-#include <linux/usb/ohci_pdriver.h>
+ #include <asm/mach/arch.h>
+ #include <asm/mach/map.h>
+ #include <asm/mach/time.h>
+@@ -79,12 +78,46 @@
  		.length		= SZ_16M,
  		.type		= MT_DEVICE,
  #endif
@@ -232,10 +240,180 @@
  }
  
  /* used by entry-macro.S */
-@@ -302,6 +338,23 @@
+@@ -302,114 +335,3 @@
  
  #endif /* CONFIG_CACHE_L2X0 */
  
+-static int csn3xxx_usb_power_on(struct platform_device *pdev)
+-{
+-	/*
+-	 * EHCI and OHCI share the same clock and power,
+-	 * resetting twice would cause the 1st controller been reset.
+-	 * Therefore only do power up  at the first up device, and
+-	 * power down at the last down device.
+-	 *
+-	 * Set USB AHB INCR length to 16
+-	 */
+-	if (atomic_inc_return(&usb_pwr_ref) == 1) {
+-		cns3xxx_pwr_power_up(1 << PM_PLL_HM_PD_CTRL_REG_OFFSET_PLL_USB);
+-		cns3xxx_pwr_clk_en(1 << PM_CLK_GATE_REG_OFFSET_USB_HOST);
+-		cns3xxx_pwr_soft_rst(1 << PM_SOFT_RST_REG_OFFST_USB_HOST);
+-		__raw_writel((__raw_readl(MISC_CHIP_CONFIG_REG) | (0X2 << 24)),
+-			MISC_CHIP_CONFIG_REG);
+-	}
+-
+-	return 0;
+-}
+-
+-static void csn3xxx_usb_power_off(struct platform_device *pdev)
+-{
+-	/*
+-	 * EHCI and OHCI share the same clock and power,
+-	 * resetting twice would cause the 1st controller been reset.
+-	 * Therefore only do power up  at the first up device, and
+-	 * power down at the last down device.
+-	 */
+-	if (atomic_dec_return(&usb_pwr_ref) == 0)
+-		cns3xxx_pwr_clk_dis(1 << PM_CLK_GATE_REG_OFFSET_USB_HOST);
+-}
+-
+-static struct usb_ehci_pdata cns3xxx_usb_ehci_pdata = {
+-	.power_on	= csn3xxx_usb_power_on,
+-	.power_off	= csn3xxx_usb_power_off,
+-};
+-
+-static struct usb_ohci_pdata cns3xxx_usb_ohci_pdata = {
+-	.num_ports	= 1,
+-	.power_on	= csn3xxx_usb_power_on,
+-	.power_off	= csn3xxx_usb_power_off,
+-};
+-
+-static const struct of_dev_auxdata cns3xxx_auxdata[] __initconst = {
+-	{ "intel,usb-ehci", CNS3XXX_USB_BASE, "ehci-platform", &cns3xxx_usb_ehci_pdata },
+-	{ "intel,usb-ohci", CNS3XXX_USB_OHCI_BASE, "ohci-platform", &cns3xxx_usb_ohci_pdata },
+-	{ "cavium,cns3420-ahci", CNS3XXX_SATA2_BASE, "ahci", NULL },
+-	{ "cavium,cns3420-sdhci", CNS3XXX_SDIO_BASE, "ahci", NULL },
+-	{},
+-};
+-
+-static void __init cns3xxx_init(void)
+-{
+-	struct device_node *dn;
+-
+-	cns3xxx_l2x0_init();
+-
+-	dn = of_find_compatible_node(NULL, NULL, "cavium,cns3420-ahci");
+-	if (of_device_is_available(dn)) {
+-		u32 tmp;
+-	
+-		tmp = __raw_readl(MISC_SATA_POWER_MODE);
+-		tmp |= 0x1 << 16; /* Disable SATA PHY 0 from SLUMBER Mode */
+-		tmp |= 0x1 << 17; /* Disable SATA PHY 1 from SLUMBER Mode */
+-		__raw_writel(tmp, MISC_SATA_POWER_MODE);
+-	
+-		/* Enable SATA PHY */
+-		cns3xxx_pwr_power_up(0x1 << PM_PLL_HM_PD_CTRL_REG_OFFSET_SATA_PHY0);
+-		cns3xxx_pwr_power_up(0x1 << PM_PLL_HM_PD_CTRL_REG_OFFSET_SATA_PHY1);
+-	
+-		/* Enable SATA Clock */
+-		cns3xxx_pwr_clk_en(0x1 << PM_CLK_GATE_REG_OFFSET_SATA);
+-	
+-		/* De-Asscer SATA Reset */
+-		cns3xxx_pwr_soft_rst(CNS3XXX_PWR_SOFTWARE_RST(SATA));
+-	}
+-
+-	dn = of_find_compatible_node(NULL, NULL, "cavium,cns3420-sdhci");
+-	if (of_device_is_available(dn)) {
+-		u32 __iomem *gpioa = IOMEM(CNS3XXX_MISC_BASE_VIRT + 0x0014);
+-		u32 gpioa_pins = __raw_readl(gpioa);
+-	
+-		/* MMC/SD pins share with GPIOA */
+-		gpioa_pins |= 0x1fff0004;
+-		__raw_writel(gpioa_pins, gpioa);
+-	
+-		cns3xxx_pwr_clk_en(CNS3XXX_PWR_CLK_EN(SDIO));
+-		cns3xxx_pwr_soft_rst(CNS3XXX_PWR_SOFTWARE_RST(SDIO));
+-	}
+-
+-	pm_power_off = cns3xxx_power_off;
+-
+-	of_platform_default_populate(NULL, cns3xxx_auxdata, NULL);
+-}
+-
+-static const char *const cns3xxx_dt_compat[] __initconst = {
+-	"cavium,cns3410",
+-	"cavium,cns3420",
+-	NULL,
+-};
+-
+-DT_MACHINE_START(CNS3XXX_DT, "Cavium Networks CNS3xxx")
+-	.dt_compat	= cns3xxx_dt_compat,
+-	.map_io		= cns3xxx_map_io,
+-	.init_irq	= cns3xxx_init_irq,
+-	.init_time	= cns3xxx_timer_init,
+-	.init_machine	= cns3xxx_init,
+-	.init_late	= cns3xxx_pcie_init_late,
+-	.restart	= cns3xxx_restart,
+-MACHINE_END
+--- a/arch/arm/mach-cns3xxx/devices.c
++++ b/arch/arm/mach-cns3xxx/devices.c
+@@ -15,7 +15,13 @@
+ #include <linux/init.h>
+ #include <linux/compiler.h>
+ #include <linux/dma-mapping.h>
++#include <linux/of_platform.h>
+ #include <linux/platform_device.h>
++#include <linux/usb/ehci_pdriver.h>
++#include <linux/usb/ohci_pdriver.h>
++#include <asm/mach-types.h>
++#include <asm/mach/arch.h>
++#include <asm/mach/map.h>
+ #include "cns3xxx.h"
+ #include "pm.h"
+ #include "core.h"
+@@ -50,7 +56,7 @@
+ 	},
+ };
+ 
+-void __init cns3xxx_ahci_init(void)
++static void __init cns3xxx_ahci_dt_init(void)
+ {
+ 	u32 tmp;
+ 
+@@ -68,6 +74,11 @@
+ 
+ 	/* De-Asscer SATA Reset */
+ 	cns3xxx_pwr_soft_rst(CNS3XXX_PWR_SOFTWARE_RST(SATA));
++}
++
++void __init cns3xxx_ahci_init(void)
++{
++	cns3xxx_ahci_dt_init();
+ 
+ 	platform_device_register(&cns3xxx_ahci_pdev);
+ }
+@@ -95,7 +106,7 @@
+ 	.resource	= cns3xxx_sdhci_resources,
+ };
+ 
+-void __init cns3xxx_sdhci_init(void)
++static void __init cns3xxx_sdhci_dt_init(void)
+ {
+ 	u32 __iomem *gpioa = IOMEM(CNS3XXX_MISC_BASE_VIRT + 0x0014);
+ 	u32 gpioa_pins = __raw_readl(gpioa);
+@@ -106,6 +117,161 @@
+ 
+ 	cns3xxx_pwr_clk_en(CNS3XXX_PWR_CLK_EN(SDIO));
+ 	cns3xxx_pwr_soft_rst(CNS3XXX_PWR_SOFTWARE_RST(SDIO));
++}
++
++void __init cns3xxx_sdhci_init(void)
++{
++	cns3xxx_sdhci_dt_init();
+ 
+ 	platform_device_register(&cns3xxx_sdhci_pdev);
+ }
++
 +/*
 + * USB
 + */
@@ -253,13 +431,44 @@
 +
 +static u64 cns3xxx_usb_ehci_dma_mask = DMA_BIT_MASK(32);
 +
- static int csn3xxx_usb_power_on(struct platform_device *pdev)
- {
- 	/*
-@@ -340,27 +393,73 @@
- 	.power_off	= csn3xxx_usb_power_off,
- };
- 
++static int csn3xxx_usb_power_on(struct platform_device *pdev)
++{
++	/*
++	 * EHCI and OHCI share the same clock and power,
++	 * resetting twice would cause the 1st controller been reset.
++	 * Therefore only do power up  at the first up device, and
++	 * power down at the last down device.
++	 *
++	 * Set USB AHB INCR length to 16
++	 */
++	if (atomic_inc_return(&usb_pwr_ref) == 1) {
++		cns3xxx_pwr_power_up(1 << PM_PLL_HM_PD_CTRL_REG_OFFSET_PLL_USB);
++		cns3xxx_pwr_clk_en(1 << PM_CLK_GATE_REG_OFFSET_USB_HOST);
++		cns3xxx_pwr_soft_rst(1 << PM_SOFT_RST_REG_OFFST_USB_HOST);
++		__raw_writel((__raw_readl(MISC_CHIP_CONFIG_REG) | (0X2 << 24)),
++			MISC_CHIP_CONFIG_REG);
++	}
++
++	return 0;
++}
++
++static void csn3xxx_usb_power_off(struct platform_device *pdev)
++{
++	/*
++	 * EHCI and OHCI share the same clock and power,
++	 * resetting twice would cause the 1st controller been reset.
++	 * Therefore only do power up  at the first up device, and
++	 * power down at the last down device.
++	 */
++	if (atomic_dec_return(&usb_pwr_ref) == 0)
++		cns3xxx_pwr_clk_dis(1 << PM_CLK_GATE_REG_OFFSET_USB_HOST);
++}
++
++static struct usb_ehci_pdata cns3xxx_usb_ehci_pdata = {
++	.power_on	= csn3xxx_usb_power_on,
++	.power_off	= csn3xxx_usb_power_off,
++};
++
 +static struct platform_device cns3xxx_usb_ehci_device = {
 +	.name          = "ehci-platform",
 +	.num_resources = ARRAY_SIZE(cns3xxx_usb_ehci_resources),
@@ -285,12 +494,12 @@
 +
 +static u64 cns3xxx_usb_ohci_dma_mask = DMA_BIT_MASK(32);
 +
- static struct usb_ohci_pdata cns3xxx_usb_ohci_pdata = {
- 	.num_ports	= 1,
- 	.power_on	= csn3xxx_usb_power_on,
- 	.power_off	= csn3xxx_usb_power_off,
- };
- 
++static struct usb_ohci_pdata cns3xxx_usb_ohci_pdata = {
++	.num_ports	= 1,
++	.power_on	= csn3xxx_usb_power_on,
++	.power_off	= csn3xxx_usb_power_off,
++};
++
 +static struct platform_device cns3xxx_usb_ohci_device = {
 +	.name          = "ohci-platform",
 +	.num_resources = ARRAY_SIZE(cns3xxx_usb_ohci_resources),
@@ -307,49 +516,59 @@
 +	&cns3xxx_usb_ohci_device,
 +};
 +
- static const struct of_dev_auxdata cns3xxx_auxdata[] __initconst = {
- 	{ "intel,usb-ehci", CNS3XXX_USB_BASE, "ehci-platform", &cns3xxx_usb_ehci_pdata },
- 	{ "intel,usb-ohci", CNS3XXX_USB_OHCI_BASE, "ohci-platform", &cns3xxx_usb_ohci_pdata },
--	{ "cavium,cns3420-ahci", CNS3XXX_SATA2_BASE, "ahci", NULL },
--	{ "cavium,cns3420-sdhci", CNS3XXX_SDIO_BASE, "ahci", NULL },
-+	{ "cavium,cns3xxx-ahci", CNS3XXX_SATA2_BASE, "ahci", NULL },
-+	{ "cavium,cns3xxx-sdhci", CNS3XXX_SDIO_BASE, "ahci", NULL },
- 	{},
- };
- 
 +void __init cns3xxx_usb_init(void)
 +{
 +	platform_add_devices(cns3xxx_usb_pdevs, ARRAY_SIZE(cns3xxx_usb_pdevs));
 +}
 +
- static void __init cns3xxx_init(void)
- {
- 	struct device_node *dn;
- 
- 	cns3xxx_l2x0_init();
- 
--	dn = of_find_compatible_node(NULL, NULL, "cavium,cns3420-ahci");
-+	dn = of_find_compatible_node(NULL, NULL, "cavium,cns3xxx-ahci");
- 	if (of_device_is_available(dn)) {
- 		u32 tmp;
- 	
-@@ -380,7 +479,7 @@
- 		cns3xxx_pwr_soft_rst(CNS3XXX_PWR_SOFTWARE_RST(SATA));
- 	}
- 
--	dn = of_find_compatible_node(NULL, NULL, "cavium,cns3420-sdhci");
-+	dn = of_find_compatible_node(NULL, NULL, "cavium,cns3xxx-sdhci");
- 	if (of_device_is_available(dn)) {
- 		u32 __iomem *gpioa = IOMEM(CNS3XXX_MISC_BASE_VIRT + 0x0014);
- 		u32 gpioa_pins = __raw_readl(gpioa);
---- a/arch/arm/mach-cns3xxx/core.h
-+++ b/arch/arm/mach-cns3xxx/core.h
-@@ -27,6 +27,8 @@
- static inline void __init cns3xxx_pcie_init_late(void) {}
- #endif
- 
-+void __init cns3xxx_usb_init(void);
++static const struct of_dev_auxdata cns3xxx_auxdata[] __initconst = {
++	{ "intel,usb-ehci", CNS3XXX_USB_BASE, "ehci-platform", &cns3xxx_usb_ehci_pdata },
++	{ "intel,usb-ohci", CNS3XXX_USB_OHCI_BASE, "ohci-platform", &cns3xxx_usb_ohci_pdata },
++	{ "cavium,cns3xxx-ahci", CNS3XXX_SATA2_BASE, "ahci", NULL },
++	{ "cavium,cns3xxx-sdhci", CNS3XXX_SDIO_BASE, "ahci", NULL },
++	{},
++};
 +
- void __init cns3xxx_map_io(void);
- void __init cns3xxx_init_irq(void);
- void cns3xxx_power_off(void);
++static void __init cns3xxx_init(void)
++{
++	struct device_node *dn;
++
++	dn = of_find_compatible_node(NULL, NULL, "cavium,cns3xxx-ahci");
++	if (of_device_is_available(dn)) {
++		cns3xxx_ahci_dt_init();
++	}
++
++	dn = of_find_compatible_node(NULL, NULL, "cavium,cns3xxx-sdhci");
++	if (of_device_is_available(dn)) {
++		cns3xxx_sdhci_dt_init();
++	}
++
++	pm_power_off = cns3xxx_power_off;
++
++	of_platform_default_populate(NULL, cns3xxx_auxdata, NULL);
++}
++
++static const char *const cns3xxx_dt_compat[] __initconst = {
++	"cavium,cns3410",
++	"cavium,cns3420",
++	NULL,
++};
++
++DT_MACHINE_START(CNS3XXX_DT, "Cavium Networks CNS3xxx")
++	.dt_compat	= cns3xxx_dt_compat,
++	.map_io		= cns3xxx_map_io,
++	.init_irq	= cns3xxx_init_irq,
++	.init_time	= cns3xxx_timer_init,
++	.init_machine	= cns3xxx_init,
++	.init_late	= cns3xxx_pcie_init_late,
++	.restart	= cns3xxx_restart,
++MACHINE_END
+--- a/arch/arm/mach-cns3xxx/devices.h
++++ b/arch/arm/mach-cns3xxx/devices.h
+@@ -16,5 +16,6 @@
+ 
+ void __init cns3xxx_ahci_init(void);
+ void __init cns3xxx_sdhci_init(void);
++void __init cns3xxx_usb_init(void);
+ 
+ #endif /* __CNS3XXX_DEVICES_H_ */

@@ -1,6 +1,6 @@
 --- a/arch/arm/mach-cns3xxx/Kconfig
 +++ b/arch/arm/mach-cns3xxx/Kconfig
-@@ -23,4 +23,12 @@ config MACH_CNS3420VB
+@@ -23,4 +23,12 @@
  	  This is a platform with an on-board ARM11 MPCore and has support
  	  for USB, USB-OTG, MMC/SD/SDIO, SATA, PCI-E, etc.
  
@@ -15,7 +15,7 @@
  endif
 --- a/arch/arm/mach-cns3xxx/Makefile
 +++ b/arch/arm/mach-cns3xxx/Makefile
-@@ -8,3 +8,5 @@ cns3xxx-$(CONFIG_PCI)			+= pcie.o
+@@ -8,3 +8,5 @@
  cns3xxx-$(CONFIG_MACH_CNS3420VB)	+= cns3420vb.o
  cns3xxx-$(CONFIG_SMP)			+= platsmp.o headsmp.o cns3xxx_fiq.o
  cns3xxx-$(CONFIG_HOTPLUG_CPU)		+= hotplug.o
@@ -23,15 +23,16 @@
 +
 --- a/arch/arm/mach-cns3xxx/devices.c
 +++ b/arch/arm/mach-cns3xxx/devices.c
-@@ -16,6 +16,7 @@
+@@ -15,6 +15,8 @@
+ #include <linux/init.h>
  #include <linux/compiler.h>
  #include <linux/dma-mapping.h>
++#include <linux/serial_core.h>
++#include <linux/serial_8250.h>
+ #include <linux/of_platform.h>
  #include <linux/platform_device.h>
-+#include <asm/mach-types.h>
- #include "cns3xxx.h"
- #include "pm.h"
- #include "core.h"
-@@ -101,7 +102,11 @@ void __init cns3xxx_sdhci_init(void)
+ #include <linux/usb/ehci_pdriver.h>
+@@ -112,7 +114,11 @@
  	u32 gpioa_pins = __raw_readl(gpioa);
  
  	/* MMC/SD pins share with GPIOA */
@@ -44,3 +45,129 @@
  	__raw_writel(gpioa_pins, gpioa);
  
  	cns3xxx_pwr_clk_en(CNS3XXX_PWR_CLK_EN(SDIO));
+@@ -127,6 +133,70 @@
+ }
+ 
+ /*
++ * UART
++ */
++static struct resource cns3xxx_uart_resources[] = {
++	{
++		.start = CNS3XXX_UART0_BASE,
++		.end   = CNS3XXX_UART0_BASE + SZ_4K - 1,
++		.flags    = IORESOURCE_MEM
++	},{
++		.start = CNS3XXX_UART1_BASE,
++		.end   = CNS3XXX_UART1_BASE + SZ_4K - 1,
++		.flags    = IORESOURCE_MEM
++	},{
++		.start = CNS3XXX_UART2_BASE,
++		.end   = CNS3XXX_UART2_BASE + SZ_4K - 1,
++		.flags    = IORESOURCE_MEM
++	},
++};
++
++static struct plat_serial8250_port cns3xxx_uart_pdata[] = {
++	{
++		.mapbase        = (CNS3XXX_UART0_BASE),
++		.irq            = IRQ_CNS3XXX_UART0,
++		.iotype         = UPIO_MEM,
++		.flags          = UPF_BOOT_AUTOCONF | UPF_FIXED_TYPE | UPF_IOREMAP,
++		.regshift       = 2,
++		.uartclk        = 24000000,
++		.type           = PORT_16550A,
++	},{
++		.mapbase        = (CNS3XXX_UART1_BASE),
++		.irq            = IRQ_CNS3XXX_UART1,
++		.iotype         = UPIO_MEM,
++		.flags          = UPF_BOOT_AUTOCONF | UPF_FIXED_TYPE | UPF_IOREMAP,
++		.regshift       = 2,
++		.uartclk        = 24000000,
++		.type           = PORT_16550A,
++	},{
++		.mapbase        = (CNS3XXX_UART2_BASE),
++		.irq            = IRQ_CNS3XXX_UART2,
++		.iotype         = UPIO_MEM,
++		.flags          = UPF_BOOT_AUTOCONF | UPF_FIXED_TYPE | UPF_IOREMAP,
++		.regshift       = 2,
++		.uartclk        = 24000000,
++		.type           = PORT_16550A,
++	},
++	{ },
++};
++
++static struct platform_device cns3xxx_uart_pdev = {
++	.name     = "serial8250",
++	.id     = PLAT8250_DEV_PLATFORM,
++	.dev.platform_data  = cns3xxx_uart_pdata,
++	.num_resources    = 3,
++	.resource   = cns3xxx_uart_resources
++};
++
++void __init cns3xxx_uart_init(u32 num_uart)
++{
++	if (num_uart > 0) {
++		cns3xxx_uart_pdev.num_resources = num_uart > 3 ? 3 : num_uart;
++		platform_device_register(&cns3xxx_uart_pdev);
++	}
++}
++
++/*
+  * USB
+  */
+ static struct resource cns3xxx_usb_ehci_resources[] = {
+@@ -234,6 +304,38 @@
+ }
+ 
+ /*
++ * USB OTG
++ */
++static struct resource cns3xxx_usb_otg_resources[] = {
++	[0] = {
++		.start = CNS3XXX_USBOTG_BASE,
++		.end   = CNS3XXX_USBOTG_BASE + SZ_16M - 1,
++		.flags = IORESOURCE_MEM,
++	},
++	[1] = {
++		.start = IRQ_CNS3XXX_USB_OTG,
++		.flags = IORESOURCE_IRQ,
++	},
++};
++
++static u64 cns3xxx_usb_otg_dma_mask = DMA_BIT_MASK(32);
++
++static struct platform_device cns3xxx_usb_otg_pdev = {
++	.name          = "dwc2",
++	.num_resources = ARRAY_SIZE(cns3xxx_usb_otg_resources),
++	.resource      = cns3xxx_usb_otg_resources,
++	.dev           = {
++		.dma_mask          = &cns3xxx_usb_otg_dma_mask,
++		.coherent_dma_mask = DMA_BIT_MASK(32),
++	},
++};
++
++void __init cns3xxx_usb_otg_init(void)
++{
++	platform_device_register(&cns3xxx_usb_otg_pdev);
++}
++
++/*
+  * I2C
+  */
+ static struct resource cns3xxx_i2c_resources[] = {
+--- a/arch/arm/mach-cns3xxx/devices.h
++++ b/arch/arm/mach-cns3xxx/devices.h
+@@ -14,9 +14,13 @@
+ #ifndef __CNS3XXX_DEVICES_H_
+ #define __CNS3XXX_DEVICES_H_
+ 
++#include <linux/types.h>
++
+ void __init cns3xxx_ahci_init(void);
+ void __init cns3xxx_sdhci_init(void);
++void __init cns3xxx_uart_init(u32);
+ void __init cns3xxx_usb_init(void);
++void __init cns3xxx_usb_otg_init(void);
+ void __init cns3xxx_i2c_init(void);
+ void __init cns3xxx_spi_init(void);
+ void __init cns3xxx_watchdog_init(void);

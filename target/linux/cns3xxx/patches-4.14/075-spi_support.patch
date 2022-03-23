@@ -1,3 +1,42 @@
+--- a/arch/arm/mach-cns3xxx/devices.c
++++ b/arch/arm/mach-cns3xxx/devices.c
+@@ -259,6 +259,26 @@
+ }
+ 
+ /*
++ * SPI
++ */
++static struct resource cns3xxx_spi_resource = {
++	.start    = CNS3XXX_SSP_BASE + 0x40,
++	.end      = CNS3XXX_SSP_BASE + 0x6f,
++	.flags    = IORESOURCE_MEM,
++};
++
++static struct platform_device cns3xxx_spi_pdev = {
++	.name = "cns3xxx_spi",
++	.resource = &cns3xxx_spi_resource,
++	.num_resources = 1,
++};
++
++void __init cns3xxx_spi_init(void)
++{
++	platform_device_register(&cns3xxx_spi_pdev);
++}
++
++/*
+  * Watchdog
+  */
+ 
+--- a/arch/arm/mach-cns3xxx/devices.h
++++ b/arch/arm/mach-cns3xxx/devices.h
+@@ -18,6 +18,7 @@
+ void __init cns3xxx_sdhci_init(void);
+ void __init cns3xxx_usb_init(void);
+ void __init cns3xxx_i2c_init(void);
++void __init cns3xxx_spi_init(void);
+ void __init cns3xxx_watchdog_init(void);
+ 
+ #endif /* __CNS3XXX_DEVICES_H_ */
 --- a/drivers/spi/spi-cns3xxx.c
 +++ b/drivers/spi/spi-cns3xxx.c
 @@ -0,0 +1,448 @@

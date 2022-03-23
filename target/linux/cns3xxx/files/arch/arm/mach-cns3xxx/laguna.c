@@ -183,18 +183,6 @@ static struct spi_board_info __initdata laguna_spi_devices[] = {
 	},
 };
 
-static struct resource laguna_spi_resource = {
-	.start    = CNS3XXX_SSP_BASE + 0x40,
-	.end      = CNS3XXX_SSP_BASE + 0x6f,
-	.flags    = IORESOURCE_MEM,
-};
-
-static struct platform_device laguna_spi_controller = {
-	.name = "cns3xxx_spi",
-	.resource = &laguna_spi_resource,
-	.num_resources = 1,
-};
-
 /*
  * LED's
  */
@@ -345,103 +333,6 @@ static struct platform_device laguna_net_device = {
 	}
 };
 
-static struct resource laguna_uart_resources[] = {
-	{
-		.start = CNS3XXX_UART0_BASE,
-		.end   = CNS3XXX_UART0_BASE + SZ_4K - 1,
-		.flags    = IORESOURCE_MEM
-	},{
-		.start = CNS3XXX_UART1_BASE,
-		.end   = CNS3XXX_UART1_BASE + SZ_4K - 1,
-		.flags    = IORESOURCE_MEM
-	},{
-		.start = CNS3XXX_UART2_BASE,
-		.end   = CNS3XXX_UART2_BASE + SZ_4K - 1,
-		.flags    = IORESOURCE_MEM
-	},
-};
-
-static struct plat_serial8250_port laguna_uart_data[] = {
-	{
-		.mapbase        = (CNS3XXX_UART0_BASE),
-		.irq            = IRQ_CNS3XXX_UART0,
-		.iotype         = UPIO_MEM,
-		.flags          = UPF_BOOT_AUTOCONF | UPF_FIXED_TYPE | UPF_IOREMAP,
-		.regshift       = 2,
-		.uartclk        = 24000000,
-		.type           = PORT_16550A,
-	},{
-		.mapbase        = (CNS3XXX_UART1_BASE),
-		.irq            = IRQ_CNS3XXX_UART1,
-		.iotype         = UPIO_MEM,
-		.flags          = UPF_BOOT_AUTOCONF | UPF_FIXED_TYPE | UPF_IOREMAP,
-		.regshift       = 2,
-		.uartclk        = 24000000,
-		.type           = PORT_16550A,
-	},{
-		.mapbase        = (CNS3XXX_UART2_BASE),
-		.irq            = IRQ_CNS3XXX_UART2,
-		.iotype         = UPIO_MEM,
-		.flags          = UPF_BOOT_AUTOCONF | UPF_FIXED_TYPE | UPF_IOREMAP,
-		.regshift       = 2,
-		.uartclk        = 24000000,
-		.type           = PORT_16550A,
-	},
-	{ },
-};
-
-static struct platform_device laguna_uart = {
-	.name     = "serial8250",
-	.id     = PLAT8250_DEV_PLATFORM,
-	.dev.platform_data  = laguna_uart_data,
-	.num_resources    = 3,
-	.resource   = laguna_uart_resources
-};
-
-static struct resource cns3xxx_usb_otg_resources[] = {
-	[0] = {
-		.start = CNS3XXX_USBOTG_BASE,
-		.end   = CNS3XXX_USBOTG_BASE + SZ_16M - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.start = IRQ_CNS3XXX_USB_OTG,
-		.flags = IORESOURCE_IRQ,
-	},
-};
-
-static u64 cns3xxx_usb_otg_dma_mask = DMA_BIT_MASK(32);
-
-static struct platform_device cns3xxx_usb_otg_device = {
-	.name          = "dwc2",
-	.num_resources = ARRAY_SIZE(cns3xxx_usb_otg_resources),
-	.resource      = cns3xxx_usb_otg_resources,
-	.dev           = {
-		.dma_mask          = &cns3xxx_usb_otg_dma_mask,
-		.coherent_dma_mask = DMA_BIT_MASK(32),
-	},
-};
-
-/*
- * I2C
- */
-static struct resource laguna_i2c_resource[] = {
-	{
-		.start    = CNS3XXX_SSP_BASE + 0x20,
-		.end      = CNS3XXX_SSP_BASE + 0x3f,
-		.flags    = IORESOURCE_MEM,
-	},{
-		.start    = IRQ_CNS3XXX_I2C,
-		.flags    = IORESOURCE_IRQ,
-	},
-};
-
-static struct platform_device laguna_i2c_controller = {
-	.name   = "cns3xxx-i2c",
-	.num_resources  = 2,
-	.resource = laguna_i2c_resource,
-};
-
 static struct nvmem_device *at24_nvmem;
 
 static void at24_setup(struct nvmem_device *mem_acc, void *context)
@@ -505,25 +396,6 @@ static struct i2c_board_info __initdata laguna_i2c_devices[] = {
 	},{
 		I2C_BOARD_INFO("ds1672", 0x68),
 	},
-};
-
-/*
- * Watchdog
- */
-
-static struct resource laguna_watchdog_resources[] = {
-	[0] = {
-		.start	= CNS3XXX_TC11MP_TWD_BASE + 0x100, // CPU0 watchdog
-		.end	= CNS3XXX_TC11MP_TWD_BASE + SZ_4K - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-};
-
-static struct platform_device laguna_watchdog = {
-	.name		= "mpcore_wdt",
-	.id		= PLATFORM_DEVID_NONE,
-	.num_resources	= ARRAY_SIZE(laguna_watchdog_resources),
-	.resource	= laguna_watchdog_resources,
 };
 
 /*
@@ -696,9 +568,9 @@ static void __init laguna_init(void)
 				      cns3xxx_cpu_clock() * (1000000 / 8));
 	clk_register_clkdev(clk, "cpu", NULL);
 
-	platform_device_register(&laguna_watchdog);
+	cns3xxx_watchdog_init();
 
-	platform_device_register(&laguna_i2c_controller);
+	cns3xxx_i2c_init();
 
 	/* Set I2C 0-3 drive strength to 21 mA */
 	reg = MISC_IO_PAD_DRIVE_STRENGTH_CTRL_B;
@@ -721,11 +593,6 @@ static void __init laguna_init(void)
 	i2c_register_board_info(0, ARRAY_AND_SIZE(laguna_i2c_devices));
 
 	pm_power_off = cns3xxx_power_off;
-}
-
-static void __init laguna_map_io(void)
-{
-	cns3xxx_map_io();
 }
 
 static int laguna_register_gpio(struct gpio *array, size_t num)
@@ -791,6 +658,7 @@ subsys_initcall(laguna_pcie_init_irq);
 static int __init laguna_model_setup(void)
 {
 	u32 __iomem *mem;
+	u32 num_uart = 3;
 	u32 reg;
 
 	if (!machine_is_gw2388())
@@ -856,7 +724,7 @@ static int __init laguna_model_setup(void)
 			reg &= ~(1 << 10);
 			__raw_writel(reg, mem);
 
-			platform_device_register(&cns3xxx_usb_otg_device);
+			cns3xxx_usb_otg_init();
 		}
 
 		if (laguna_info.config_bitmap & (USB1_LOAD)) {
@@ -867,12 +735,12 @@ static int __init laguna_model_setup(void)
 			cns3xxx_sdhci_init();
 
 		if (laguna_info.config_bitmap & (UART0_LOAD))
-			laguna_uart.num_resources = 1;
+			num_uart = 1;
 		if (laguna_info.config_bitmap & (UART1_LOAD))
-			laguna_uart.num_resources = 2;
+			num_uart = 2;
 		if (laguna_info.config_bitmap & (UART2_LOAD))
-			laguna_uart.num_resources = 3;
-		platform_device_register(&laguna_uart);
+			num_uart = 3;
+		cns3xxx_uart_init(num_uart);
 
 		if (laguna_info.config2_bitmap & (NOR_FLASH_LOAD)) {
 			laguna_nor_partitions[2].size =
@@ -893,7 +761,7 @@ static int __init laguna_model_setup(void)
 
 		if ((laguna_info.config_bitmap & SPI0_LOAD) ||
 		    (laguna_info.config_bitmap & SPI1_LOAD))
-			platform_device_register(&laguna_spi_controller);
+			cns3xxx_spi_init();
 
 		if (laguna_info.config2_bitmap & GPS_LOAD)
 			platform_device_register(&laguna_pps_device);
@@ -980,7 +848,7 @@ late_initcall(laguna_model_setup);
 MACHINE_START(GW2388, "Gateworks Corporation Laguna Platform")
 	.smp		= smp_ops(cns3xxx_smp_ops),
 	.atag_offset	= 0x100,
-	.map_io		= laguna_map_io,
+	.map_io		= cns3xxx_map_io,
 	.init_irq	= cns3xxx_init_irq,
 	.init_time	= cns3xxx_timer_init,
 	.init_machine	= laguna_init,

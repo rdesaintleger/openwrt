@@ -1,6 +1,6 @@
 --- a/arch/arm/mach-cns3xxx/core.c
 +++ b/arch/arm/mach-cns3xxx/core.c
-@@ -83,6 +83,16 @@
+@@ -80,6 +80,16 @@
  		.pfn		= __phys_to_pfn(CNS3XXX_PCIE1_CFG1_BASE),
  		.length		= SZ_16M,
  		.type		= MT_DEVICE,

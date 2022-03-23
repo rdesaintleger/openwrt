@@ -1,14 +1,14 @@
 --- a/arch/arm/mach-cns3xxx/core.c
 +++ b/arch/arm/mach-cns3xxx/core.c
-@@ -19,6 +19,7 @@
+@@ -16,6 +16,7 @@
+ #include <linux/serial_8250.h>
+ #include <linux/irqchip/arm-gic.h>
  #include <linux/platform_device.h>
- #include <linux/usb/ehci_pdriver.h>
- #include <linux/usb/ohci_pdriver.h>
 +#include <asm/smp_twd.h>
  #include <asm/mach/arch.h>
  #include <asm/mach/map.h>
  #include <asm/mach/time.h>
-@@ -28,6 +29,8 @@
+@@ -25,6 +26,8 @@
  #include "core.h"
  #include "pm.h"
  
@@ -17,7 +17,7 @@
  static struct map_desc cns3xxx_io_desc[] __initdata = {
  	{
  		.virtual	= CNS3XXX_TC11MP_SCU_BASE_VIRT,
-@@ -234,6 +237,15 @@
+@@ -231,6 +234,15 @@
  	.handler	= cns3xxx_timer_interrupt,
  };
  
@@ -33,7 +33,7 @@
  /*
   * Set up the clock source and clock events devices
   */
-@@ -287,6 +299,7 @@
+@@ -284,6 +296,7 @@
  	setup_irq(timer_irq, &cns3xxx_timer_irq);
  
  	cns3xxx_clockevents_init(timer_irq);

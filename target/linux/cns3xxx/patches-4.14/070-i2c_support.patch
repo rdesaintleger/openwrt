@@ -1,3 +1,47 @@
+--- a/arch/arm/mach-cns3xxx/devices.c
++++ b/arch/arm/mach-cns3xxx/devices.c
+@@ -234,6 +234,31 @@
+ }
+ 
+ /*
++ * I2C
++ */
++static struct resource cns3xxx_i2c_resources[] = {
++	{
++		.start    = CNS3XXX_SSP_BASE + 0x20,
++		.end      = CNS3XXX_SSP_BASE + 0x3f,
++		.flags    = IORESOURCE_MEM,
++	},{
++		.start    = IRQ_CNS3XXX_I2C,
++		.flags    = IORESOURCE_IRQ,
++	},
++};
++
++static struct platform_device cns3xxx_i2c_pdev = {
++	.name   = "cns3xxx-i2c",
++	.num_resources  = 2,
++	.resource = cns3xxx_i2c_resources,
++};
++
++void __init cns3xxx_i2c_init(void)
++{
++	platform_device_register(&cns3xxx_i2c_pdev);
++}
++
++/*
+  * Watchdog
+  */
+ 
+--- a/arch/arm/mach-cns3xxx/devices.h
++++ b/arch/arm/mach-cns3xxx/devices.h
+@@ -17,6 +17,7 @@
+ void __init cns3xxx_ahci_init(void);
+ void __init cns3xxx_sdhci_init(void);
+ void __init cns3xxx_usb_init(void);
++void __init cns3xxx_i2c_init(void);
+ void __init cns3xxx_watchdog_init(void);
+ 
+ #endif /* __CNS3XXX_DEVICES_H_ */
 --- a/drivers/i2c/busses/Kconfig
 +++ b/drivers/i2c/busses/Kconfig
 @@ -474,6 +474,18 @@
